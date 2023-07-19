@@ -1,7 +1,7 @@
 # Tripo OS
 O sistema operacional 100% desenvoklvido pelo TheTripolino
 
-# Suporte com suporte a apps:
+# Com suporte a apps:
 - Em formato .deb
 - Em formato .appimage
 - Em formato .rpm
