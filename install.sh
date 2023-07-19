@@ -1,131 +1,191 @@
 #!/bin/bash
 
-# Atualiza e instala pacotes necessários no Ubuntu
-sudo apt update
-sudo apt install -y git wget bc pkg-config curl unzip nala
+# Configuração
+LFS=/mnt/lfs
+ARCH=x86_64
+SRC=/src
 
-# Faz download e compila as ferramentas do LFS
-git clone git://git.kernel.org/pub/scm/libs/klibc/klibc.git
-cd klibc
-make defconfig
-make
-sudo make install
-cd .. 
+# Funções
+download_sources(){
 
-wget http://www.linuxfromscratch.org/lfs/view/stable/wget-list
-wget -i wget-list
+# Pacotes
+PACKAGES="snapd
+          flatpak
+          appimagetool
+          winehq-stable 
+          firefox
+          gnome-minimal
+          glibc
+          linux  
+          gcc
+          nala"
 
-# Cria partições e sistemas de arquivos para o LFS
-sudo mkfs.ext4 /dev/sdb1
-sudo mkswap /dev/sdb2
-sudo swapon /dev/sdb2  
-sudo mount /dev/sdb1 /mnt/lfs
-sudo mkdir -pv /mnt/lfs/sources
+# Efetua downloads
+for package in $PACKAGES; do
+  case "$package" in
 
-# Instala pacotes essenciais no LFS
-sudo chroot /mnt/lfs /tools/bin/env -i \
-    HOME=/root \
-    TERM="$TERM" \
-    PS1='\u:\w\$ ' \
-    PATH=/bin:/usr/bin:/sbin:/usr/sbin:/tools/bin \
-    /tools/bin/bash --login +h -c "cd /sources && echo 'Instalando pacotes essenciais...' &&
-wget http://www.linuxfromscratch.org/lfs/view/stable/chapter05/coreutils-8.32.tar.xz &&  
-tar -xf coreutils-*.tar.xz &&
-cd coreutils* &&  
-./configure --prefix=/tools &&   
-make -j$(nproc) &&
-make install &&
-cd .. && 
-rm -rf coreutils*"
+    snapd )
+      wget -P $DIR https://github.com/snapcore/snapd/releases/download/2.51/snapd_2.51_amd64.tar.xz ;;
 
-# Compila e instala o GCC no LFS
-sudo chroot /mnt/lfs /tools/bin/env -i \
-    HOME=/root \
-    TERM="$TERM" \
-    PS1='\u:\w\$ ' \ 
-    PATH=/bin:/usr/bin:/sbin:/usr/sbin:/tools/bin \
-    /tools/bin/bash --login +h -c "wget https://ftp.gnu.org/gnu/gcc/gcc-10.2.0/gcc-10.2.0.tar.xz &&
-tar -xf gcc-*.tar.xz &&   
-cd gcc-10.2.0 &&
-./contrib/download_prerequisites &&
-cd .. &&   
-mkdir gcc-build &&
-cd gcc-build &&   
-../gcc-10.2.0/configure --prefix=/tools --enable-languages=c,c++ --without-headers && 
-make -j$(nproc) &&
-make install &&  
-cd .. &&
-rm -rf gcc*"
+    flatpak )
+      wget -P $DIR http://flathub.org/repo/appstream/org.freedesktop.Platform.flatpak.BaseApp/x86_64/stable/1.12.9/org.freedesktop.Platform.flatpak.BaseApp-1.12.9.x86_64.flatpak ;;
+    
+    appimagetool )  
+      wget -P $DIR https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage ;;
 
-# Instala o LFS em /mnt/lfs
-sudo chroot /mnt/lfs /tools/bin/env -i \
-    HOME=/root \
-    TERM="$TERM" \
-    PS1='\u:\w\$ ' \
-    PATH=/bin:/usr/bin:/sbin:/usr/sbin:/tools/bin \
-    /tools/bin/bash --login +h -c "export LFS=/mnt/lfs &&
-/tools/bin/bash /sources/lfs-book-11.1-aarch64-systemd/chapter05/chapter05.sh &&
-/tools/bin/bash /sources/lfs-book-11.1-aarch64-systemd/chapter06/chapter06.sh"
+    winehq-stable )
+      wget -P $DIR https://dl.winehq.org/wine-builds/ubuntu/pool/main/w/wine-builds/winehq-stable-ubuntu-5.0.3.tar.gz ;;
 
-# Instala o GNOME minimalista no LFS
-sudo chroot /mnt/lfs /usr/bin/env -i \
-    HOME=/root \
-    TERM="$TERM" \
-    PS1='\u:\w\$ ' \ 
-    PATH=/bin:/usr/bin:/sbin:/usr/sbin \
-    /bin/bash --login +h -c "pacman -Syu --noconfirm &&
-pacman -S --noconfirm gdm gnome-shell gnome-terminal networkmanager"
+    firefox )
+      wget -P $DIR https://download-installer.cdn.mozilla.net/pub/firefox/releases/108.0/linux-x86_64/en-US/firefox-108.0.tar.bz2 ;;
 
-# Habilita suporte a snap, flatpak, appimage e wine no LFS  
-sudo chroot /mnt/lfs /usr/bin/env -i \
-    HOME=/root \
-    TERM="$TERM" \
-    PS1='\u:\w\$ ' \
-    PATH=/bin:/usr/bin:/sbin:/usr/sbin \
-    /bin/bash --login +h -c "pacman -S --noconfirm snapd flatpak appimagelauncher wine"
+    gnome-minimal )
+      wget -P $DIR http://ftp.acc.umu.se/pub/gnome/core/3.38/3.38.4/sources/gnome-minimal-3.38.4.tar.xz ;;
 
-# Instala nala e adiciona PPAs comuns no Ubuntu
-sudo apt install nala -y  
-nala update
-nala upgrade -y
-nala install software-properties-common
-add-apt-repository ppa:alexlarsson/flatpak -y
-add-apt-repository ppa:obsproject/obs-studio -y
+    glibc )  
+      wget -P $DIR http://www.linuxfromscratch.org/lfs/downloads/glibc-2.35.tar.xz ;;
 
-# Gera ISO do LFS
-sudo chroot /mnt/lfs /usr/bin/env -i \
-    HOME=/root \ 
-    TERM="$TERM" \
-    PS1='\u:\w\$ ' \
-    PATH=/bin:/usr/bin:/sbin:/usr/sbin \
-    /bin/bash --login +h -c "cd / &&
-mkisofs -R -b boot/grub/efi.img -no-emul-boot \
-    -iso-level 3 -rock -joliet-long -o /home/$SUDO_USER/lfs.iso ."
+    linux )
+      wget -P $DIR http://www.linuxfromscratch.org/lfs/downloads/linux-5.15.tar.xz ;;
 
-# Desmonta partições 
-sudo umount /mnt/lfs/dev/pts  
-sudo umount /mnt/lfs/dev
-sudo umount /mnt/lfs/run
-sudo umount /mnt/lfs/proc
-sudo umount /mnt/lfs/sys
-sudo umount /mnt/lfs
+    gcc )
+      wget -P $DIR http://www.linuxfromscratch.org/lfs/downloads/gcc-11.2.0.tar.xz ;;
 
-# Instala o LFS em /dev/sdb
-sudo mkfs.ext4 /dev/sdb1
-sudo mkswap /dev/sdb2  
-sudo swapon /dev/sdb2
-sudo mount /dev/sdb1 /mnt/lfs  
-sudo mkdir -pv /mnt/lfs/sources
-sudo cp lfs.iso /mnt/lfs/sources/
+    nala )
+      wget -P $DIR https://github.com/volitank/nala/releases/download/v1.7.0/nala-1.7.0.tar.gz ;;
 
-sudo chroot /mnt/lfs /usr/bin/env -i \
-    HOME=/root \
-    TERM="$TERM" \ 
-    PS1='\u:\w\$ ' \
-    PATH=/bin:/usr/bin:/sbin:/usr/sbin \
-    /bin/bash --login +h -c "mkdir /cdrom && mount -o loop /sources/lfs.iso /cdrom &&
-/cdrom/install.sh && reboot"  
+  esac
+done
 
-sudo umount /mnt/lfs
+}
 
-echo "LFS instalado em /dev/sdb e ISO gerada em ~/lfs.iso"
+build_package(){
+
+  cd "$1"
+
+  ./configure --prefix=/mnt/lfs && make -j4 && make install
+
+  if [ $? -ne 0 ]; then
+    echo "Erro ao compilar $1"
+    exit 1
+  fi
+
+}
+
+configure_system(){
+
+  # Instala gerenciador de pacotes
+  pacstrap /mnt/lfs apt || { echo "Falha ao instalar pacstrap"; exit 1; }
+
+  # Adiciona repositórios extras
+  echo "deb http://archive.ubuntu.com/ubuntu/ jammy main universe" >> /mnt/lfs/etc/apt/sources.list
+
+  # Atualiza e instala pacotes
+  arch-chroot /mnt/lfs apt update
+  if [ $? -ne 0 ]; then 
+    echo "Erro ao atualizar repositórios"
+    exit 1
+  fi
+  # Repositorio Flatpak
+  arch-chroot /mnt/lfs flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+  # Repositorio AppImage
+  wget -P /mnt/lfs/opt/ https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+
+  # Repositorios DEB 
+  echo "deb http://archive.ubuntu.com/ubuntu/ jammy main universe" >> /mnt/lfs/etc/apt/sources.list
+
+  # Repositorio Nala  
+  curl https://raw.githubusercontent.com/volitank/nala/master/scripts/install.sh | bash
+
+  # Repositorios GNOME
+  echo "deb http://archive.ubuntu.com/ubuntu/ jammy main universe" >> /etc/apt/sources.list  
+
+  # Repositorio Firefox
+  echo "deb http://archive.ubuntu.com/ubuntu/ jammy main universe" >> /etc/apt/sources.list
+
+  # Repositorio do Wine
+  echo "deb https://dl.winehq.org/wine-builds/ubuntu/ jammy main" | tee -a /etc/apt/sources.list.d/winehq.list
+
+  # Repositorio do RPM 
+  echo "[rpm]
+  name=RPM repository
+  baseurl=http://rpms.famillecollet.com/enterprise/7/remi/x86_64/
+  enabled=1
+  gpgcheck=1
+  gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-remi" | tee -a /etc/yum.repos.d/remi.repo
+
+  # Repositorio do Snap
+  echo "types: [snap]" | tee -a /etc/apt/sources.list.d/snapcraft.list
+
+  arch-chroot /mnt/lfs apt install -y gnome-shell firefox
+
+  # Instala snap 
+  arch-chroot /mnt/lfs apt install snapd -y
+  arch-chroot /mnt/lfs systemctl enable --now snapd.socket
+  arch-chroot /mnt/lfs /usr/bin/snap wait system seed.loaded
+  arch-chroot /mnt/lfs snap install hello
+
+  # Instala flatpak
+  arch-chroot /mnt/lfs apt install flatpak -y
+  arch-chroot /mnt/lfs flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+  arch-chroot /mnt/lfs flatpak install flathub com.spotify.Client
+
+  # Instala AppImage
+  arch-chroot /mnt/lfs apt install libfuse2 -y
+  arch-chroot /mnt/lfs wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+  arch-chroot /mnt/lfs chmod +x appimagetool-x86_64.AppImage
+
+  # Instala deb
+  echo "deb http://archive.ubuntu.com/ubuntu/ jammy main universe" >> /etc/apt/sources.list
+  arch-chroot /mnt/lfs apt update 
+  arch-chroot /mnt/lfs apt install gdebi -y
+  arch-chroot /mnt/lfs gdebi /caminho/para/pacote.deb
+
+  # Instala rpm
+  arch-chroot /mnt/lfs apt install rpm -y
+  arch-chroot /mnt/lfs rpm -i /caminho/para/pacote.rpm
+
+  # Instala wine
+  arch-chroot /mnt/lfs apt install winehq-stable -y
+
+  if [ $? -ne 0 ]; then
+    echo "Erro ao instalar pacotes adicionais"
+    exit 1
+  fi
+
+  # Cria usuario
+  arch-chroot /mnt/lfs useradd -m tripo-os || { echo "Falha ao criar usuário"; exit 1; }
+
+  # Configura rede
+  echo "iface eth0 inet dhcp" > /mnt/lfs/etc/network/interfaces || { echo "Falha rede"; exit 1; }
+
+  # Outras configuracoes
+  echo "pts/0" >> /mnt/lfs/etc/securetty || { echo "Falha conf"; exit 1; }
+
+}
+for pkg in glibc gcc coreutils linux; do
+  build_package $SRC/$pkg
+done
+
+configure_system
+
+# Gera ISO
+
+# Cria diretorio para a imagem ISO
+mkdir /mnt/lfs/iso
+
+# Copia arquivos do sistema LFS 
+cp -R /mnt/lfs/* /mnt/lfs/iso/
+
+mkisofs -o /mnt/lfs/iso/lfs-custom.iso \
+  -eltorito-alt-boot \
+  -e images/efiboot.img -no-emul-boot \
+  -isohybrid-gpt-basdat \
+  -R -J -v -V "LFS Custom" \
+  /mnt/lfs/iso
+
+# Verifica tamanho da ISO 
+iso_size=$(du -h /mnt/lfs/iso/lfs-custom.iso | cut -f1)
+echo "ISO de $iso_size gerada em /mnt/lfs/iso/lfs-custom.iso"
+echo "ISO gerada em $LFS/iso/lfs-custom.iso"
